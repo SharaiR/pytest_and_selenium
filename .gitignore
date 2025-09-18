@@ -1,0 +1,7 @@
+# Python / pytest
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+.pytest_cache/

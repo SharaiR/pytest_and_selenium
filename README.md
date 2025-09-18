@@ -1,2 +1,6 @@
-# pytest_and_selenium
-Template repository Python 3, Pytest and Selenium (POM, fixtures, reports, CI).
+# pytest-selenium-template
+
+A starter project template for Pytest + Selenium with a Page Object Model (POM), fixtures, crash screenshots, HTML/Allure reports.
+
+## License
+MIT
