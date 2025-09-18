@@ -1,3 +1,5 @@
+.vscode/
+
 # Python / pytest
 __pycache__/
 .venv/
@@ -6,11 +8,11 @@ venv/
 .env.*
 !.env.example
 .pytest_cache/
+.coverage
+.coverage.*
 
 # Reports & artifacts
 reports/
 artifacts/
-
-# Allure
 allure-results/
 allure-report/
