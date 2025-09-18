@@ -1,7 +1,16 @@
 # Python / pytest
+__pycache__/
 .venv/
 venv/
 .env
 .env.*
 !.env.example
 .pytest_cache/
+
+# Reports & artifacts
+reports/
+artifacts/
+
+# Allure
+allure-results/
+allure-report/
