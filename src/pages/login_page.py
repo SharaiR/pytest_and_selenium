@@ -5,7 +5,7 @@ from .base_page import BasePage
 
 class LoginPage(BasePage):
     """Page Object for the login page."""
-    
+
     USERNAME = (By.ID, "user-name")
     PASSWORD = (By.ID, "password")
     LOGIN_BTN = (By.ID, "login-button")

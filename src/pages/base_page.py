@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Any, Optional
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.common.by import By
@@ -19,8 +18,10 @@ class BasePage:
         base_url: Base URL used by `open()` for relative paths.
         wait: WebDriverWait configured with `default_timeout`.
     """
-    
-    def __init__(self, driver: WebDriver, base_url: str, default_timeout: int = 10) -> None:
+
+    def __init__(
+        self, driver: WebDriver, base_url: str, default_timeout: int = 10
+    ) -> None:
         """Initialise the page.
 
         Args:
@@ -29,7 +30,7 @@ class BasePage:
             default_timeout: Explicit wait timeout in seconds.
         """
         self.driver = driver
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.wait = WebDriverWait(self.driver, default_timeout)
 
     def open(self, path: str = "") -> None:

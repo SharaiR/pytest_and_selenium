@@ -5,6 +5,7 @@ from src.pages.login_page import LoginPage
 
 TEST_URL = "https://example.com"
 
+
 def test_open_login_calls_open_root():
     drv = MagicMock()
     page = LoginPage(drv, base_url=TEST_URL, default_timeout=5)

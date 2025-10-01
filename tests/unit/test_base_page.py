@@ -7,6 +7,7 @@ from src.pages.base_page import BasePage
 
 TEST_URL = "https://example.com"
 
+
 @pytest.fixture
 def mock_driver():
     drv = MagicMock()

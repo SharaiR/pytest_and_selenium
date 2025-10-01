@@ -1,6 +1,5 @@
 import pytest
 from unittest.mock import MagicMock
-from selenium.webdriver.common.by import By
 
 from src.pages.inventory_page import InventoryPage
 

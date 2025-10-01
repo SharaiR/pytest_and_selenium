@@ -1,4 +1,3 @@
-import os
 from importlib import reload
 
 from src import config
@@ -24,7 +23,7 @@ def test_settings_reads_env(monkeypatch):
 
     # Reload the module so that dataclass rereads env
     reload(config)
-    
+
     s = config.settings
     assert s.base_url == "https://test.local"
     assert s.browser == "firefox"

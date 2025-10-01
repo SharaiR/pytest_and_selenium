@@ -5,7 +5,7 @@ from .base_page import BasePage
 
 class InventoryPage(BasePage):
     """Page Object for the inventory (product listing) page."""
-    
+
     TITLE = (By.CSS_SELECTOR, ".title")
     ADD_TO_CART_BUTTONS = (By.CSS_SELECTOR, "button.btn_inventory")
     CART_BADGE = (By.CSS_SELECTOR, ".shopping_cart_badge")
