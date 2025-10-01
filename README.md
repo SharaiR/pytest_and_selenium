@@ -9,7 +9,9 @@
 ![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 [![flake8](https://img.shields.io/badge/lint-flake8-lightgrey.svg)]()
 ![Black](https://img.shields.io/badge/code%20style-black-000000.svg)
-![Allure](https://img.shields.io/badge/report-Allure-ff69b4)
+<!-- ![Allure](https://img.shields.io/badge/report-Allure-ff69b4) -->
+[![CI](https://github.com/SharaiR/pytest_and_selenium/actions/workflows/ci.yml/badge.svg)](https://github.com/SharaiR/pytest_and_selenium/actions)
+[Allure Report (latest)](https://sharair.github.io/pytest_and_selenium/)
 
 A modern **Pytest + Selenium** template project with Page Object Model (POM), fixtures, screenshots on failures and ready-to-use reporting (HTML & Allure).
 
@@ -136,6 +138,11 @@ python3 -m coverage html -d reports/coverage
 ```bash
 .
 ├── .github/
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   ├── ISSUE_TEMPLATE/
+│       ├── bug_report.md
+│       ├── feature_request.md
+│       └── config.yml
 │   └── workflows/
 │       └── ci.yml
 ├── artifacts/                      # Screenshots on failure
