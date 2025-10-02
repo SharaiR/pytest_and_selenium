@@ -98,6 +98,9 @@ jobs:
           sudo apt-get install -y google-chrome-stable
           google-chrome --version
 
+      - name: Remove preinstalled chromedriver
+        run: sudo rm -f /usr/bin/chromedriver || true
+
       - name: Create .env from GitHub Secrets/Vars (e2e)
         shell: bash
         run: |
@@ -121,14 +124,11 @@ jobs:
         run: |
           set -euo pipefail
           set -a; source .env; set +a
-          if [[ "${BROWSER:-chrome}" != "chrome" ]]; then
-            echo "WARNING: BROWSER=$BROWSER is not supported in CI yet. Forcing chrome."
-          fi
           H="${HEADLESS:-true}"; H="${H,,}"
           EXTRA=""
           if [[ "$H" == "true" || "$H" == "1" || "$H" == "yes" ]]; then EXTRA="--headless"; fi
-          echo "Running smoke on chrome, headless=$H"
-          pytest -m "smoke" --browser=chrome $EXTRA \
+          echo "Running smoke on $BROWSER, headless=$H"
+          pytest -m "smoke" --browser=$BROWSER $EXTRA \
             --html=reports/report.html --self-contained-html -n auto
 
       - name: Run e2e/regression (Allure raw results)
@@ -139,8 +139,8 @@ jobs:
           H="${HEADLESS:-true}"; H="${H,,}"
           EXTRA=""
           if [[ "$H" == "true" || "$H" == "1" || "$H" == "yes" ]]; then EXTRA="--headless"; fi
-          echo "Running e2e/regression on chrome, headless=$H"
-          pytest -m "e2e or regression" --browser=chrome $EXTRA \
+          echo "Running e2e/regression on $BROWSER, headless=$H"
+          pytest -m "e2e or regression" --browser=$BROWSER $EXTRA \
             --alluredir=reports/allure-results -n auto
 
       - name: Upload HTML report
@@ -156,5 +156,14 @@ jobs:
         with:
           name: allure-results
           path: reports/allure-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload screenshots (on failures)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: artifacts/screenshots/
           if-no-files-found: ignore
           retention-days: 7
