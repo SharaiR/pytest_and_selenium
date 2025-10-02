@@ -149,7 +149,9 @@ jobs:
     name: Deploy Allure Report (GitHub Pages)
     runs-on: ubuntu-latest
     needs: e2e
-    if: always()
+    # Deploy only with pushes to the main branch (replace main if otherwise)
+    if: github.event_name == 'push' && github.ref_name == 'main'
+    # if: always()
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -164,7 +166,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+        
+      # 1.1. Download Allure results from e2e job
       - name: Download allure results
         uses: actions/download-artifact@v4
         with:
@@ -172,6 +175,15 @@ jobs:
           path: reports/allure-results
         continue-on-error: true
 
+      # 1.2. Download unit test artifacts (including coverage.xml)
+      - name: Download unit artifacts (coverage)
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-artifacts
+          path: unit_artifacts
+        continue-on-error: true
+
+      # 1.3. Check that allure-results exists
       - name: Check Allure results presence
         id: check_allure
         run: |
@@ -182,18 +194,56 @@ jobs:
             echo "No allure results found; skipping Pages deploy."
           fi
 
+      # 1.4. Install Allure CLI only if there are results
       - name: Install Allure CLI
         if: steps.check_allure.outputs.found == 'true'
         run: |
           npm install -g allure-commandline --save-dev
           allure --version
 
+      # 1.5. Generate HTML Allure (if there are results)
       - name: Generate Allure static site
         if: steps.check_allure.outputs.found == 'true'
         run: |
           allure generate reports/allure-results --clean -o reports/allure-report
           test -f reports/allure-report/index.html
 
+      # 1.6. Building coverage.json for Shields from reports/coverage.xml
+      - name: Build coverage.json for Shields
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET, json, pathlib, sys
+          p = pathlib.Path('unit_artifacts/reports/coverage.xml')
+          if not p.exists():
+              print("coverage.xml not found; skipping coverage.json", file=sys.stderr)
+              sys.exit(0)
+          root = ET.parse(p).getroot()
+          rate = float(root.attrib.get('line-rate', 0.0)) * 100.0
+          pct = round(rate, 1) if rate % 1 else int(rate)
+          color = 'brightgreen' if rate >= 80 else ('yellow' if rate >= 50 else 'red')
+          data = {"schemaVersion":1,"label":"coverage","message":f"{pct}%", "color":color}
+          out = pathlib.Path('coverage.json'); out.write_text(json.dumps(data), encoding='utf-8')
+          print("coverage.json:", out.read_text())
+          PY
+
+      # 1.7. Put the site: Allure (if available) + coverage.json into one folder public/
+      - name: Prepare Pages bundle (Allure + coverage.json)
+        run: |
+          rm -rf public
+          mkdir -p public
+          # если Allure сгенерирован — кладём его
+          if [ -d "reports/allure-report" ]; then
+            cp -r reports/allure-report/* public/
+          else
+            # fallback индекс, чтобы Pages не был пустым
+            echo '<!doctype html><meta charset="utf-8"><title>No Allure report</title><h1>No Allure report for this run</h1>' > public/index.html
+          fi
+          # добавляем coverage.json (если есть)
+          if [ -f "coverage.json" ]; then
+            cp coverage.json public/coverage.json
+          fi
+
+      # 1.8. Deploy to Pages (GitHub Actions source)
       - name: Configure Pages
         if: steps.check_allure.outputs.found == 'true'
         uses: actions/configure-pages@v5
@@ -202,9 +252,8 @@ jobs:
         if: steps.check_allure.outputs.found == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: reports/allure-report
+          path: public
 
       - name: Deploy to GitHub Pages
-        if: steps.check_allure.outputs.found == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
