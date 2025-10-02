@@ -109,10 +109,19 @@ jobs:
       - name: Run E2E smoke tests
         run: |
           set -euo pipefail
-          mkdir -p reports artifacts/screenshots
+          mkdir -p reports artifacts/screenshots reports/allure-results
           echo "Running smoke on ${BROWSER:-unset}, headless=${HEADLESS:-unset}"
           pytest -m "e2e and smoke" -q \
-            --html=reports/e2e_report.html --self-contained-html
+            --html=reports/e2e_report.html --self-contained-html \
+            --alluredir=reports/allure-results
+
+      - name: Debug reports tree (optional)
+        if: always()
+        run: |
+          echo "==== reports/ ===="
+          find reports -maxdepth 2 -type f -print || true
+          echo "==== artifacts/ ===="
+          find artifacts -maxdepth 3 -type f -print || true
 
       - name: Upload E2E artifacts (HTML + screenshots)
         if: always()
