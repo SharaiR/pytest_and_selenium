@@ -140,3 +140,65 @@ jobs:
           name: allure-results
           path: reports/allure-results
           if-no-files-found: warn
+  
+  # --- Build & Deploy Allure to GitHub Pages (via GitHub Actions source) ---
+  deploy-allure:
+    name: Deploy Allure Report (GitHub Pages)
+    runs-on: ubuntu-latest
+    needs: e2e
+    if: always()
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: "pages"
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download allure results
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-results
+          path: reports/allure-results
+        continue-on-error: true
+
+      - name: Check Allure results presence
+        id: check_allure
+        run: |
+          if [ -d reports/allure-results ] && [ "$(ls -A reports/allure-results 2>/dev/null)" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "No allure results found; skipping Pages deploy."
+          fi
+
+      - name: Install Allure CLI
+        if: steps.check_allure.outputs.found == 'true'
+        run: |
+          npm install -g allure-commandline --save-dev
+          allure --version
+
+      - name: Generate Allure static site
+        if: steps.check_allure.outputs.found == 'true'
+        run: |
+          allure generate reports/allure-results --clean -o reports/allure-report
+          test -f reports/allure-report/index.html
+
+      # Configure Pages and upload the site artifact
+      - name: Configure Pages
+        if: steps.check_allure.outputs.found == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        if: steps.check_allure.outputs.found == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: reports/allure-report
+
+      # Deploy to Pages
+      - name: Deploy to GitHub Pages
+        if: steps.check_allure.outputs.found == 'true'
+        id: deployment
+        uses: actions/deploy-pages@v4
