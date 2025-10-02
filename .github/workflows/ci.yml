@@ -3,7 +3,7 @@ name: CI
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master, feature/** ]
+    branches: [ main, master, feature/**, release/** ]
   pull_request:
     branches: [ main, master ]
 
@@ -19,17 +19,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: ${{ runner.os }}-pip-
+
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
       - name: black --check
         run: black --check .
+
       - name: flake8
         run: flake8 src tests
 
@@ -47,16 +51,20 @@ jobs:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: ${{ runner.os }}-pip-
+
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
       - name: Use .env.example
         run: cp .env.example .env
+
       - name: Run unit tests with coverage
         run: |
           pytest tests/unit --cov=src --cov-report=term-missing \
             --cov-report=xml:reports/coverage/coverage.xml
+
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
@@ -74,15 +82,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: ${{ runner.os }}-pip-
+
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
       - name: Install Google Chrome
         run: |
           sudo apt-get update
@@ -93,16 +104,70 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
           google-chrome --version
-      - name: Use .env.example
-        run: cp .env.example .env
+
+      # Create .env from Secrets/Vars
+      - name: Create .env from GitHub Secrets/Vars (e2e)
+        run: |
+          cat > .env <<'EOF'
+          BASE_URL=${{ vars.BASE_URL }}
+          BROWSER=${{ vars.BROWSER }}
+          HEADLESS=${{ vars.HEADLESS }}
+          DEFAULT_TIMEOUT=10
+          SKIP_PRERUN_CHECK=${{ vars.SKIP_PRERUN_CHECK }}
+
+          E2E_DEFAULT_USER=${{ secrets.E2E_DEFAULT_USER }}
+          E2E_USERS_JSON=${{ secrets.E2E_USERS_JSON }}
+          E2E_PASSWORD_standard_user=${{ secrets.E2E_PASSWORD_standard_user }}
+          EOF
+
+      # Preparing flags for pytest: browser + headless
+      - name: Prepare pytest flags
+        id: flags
+        shell: bash
+        run: |
+          BROWSER="${{ vars.BROWSER }}"
+          if [ -z "$BROWSER" ]; then BROWSER="chrome"; fi
+
+          HEADLESS="${{ vars.HEADLESS }}"
+          HEADLESS_FLAG=""
+          case "${HEADLESS,,}" in
+            1|true|yes|y|on) HEADLESS_FLAG="--headless" ;;
+          esac
+
+          echo "browser=$BROWSER" >> "$GITHUB_OUTPUT"
+          echo "headless=$HEADLESS_FLAG" >> "$GITHUB_OUTPUT"
+
+      # Install the desired browser (verified marketplace actions)
+      - name: Setup Chrome
+        if: ${{ steps.flags.outputs.browser == 'chrome' }}
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+      - name: Show Chrome version
+        if: ${{ steps.flags.outputs.browser == 'chrome' }}
+        run: chrome --version || google-chrome --version || true
+
+      - name: Setup Firefox
+        if: ${{ steps.flags.outputs.browser == 'firefox' }}
+        uses: browser-actions/setup-firefox@v1
+        with:
+          firefox-version: latest
+      - name: Show Firefox version
+        if: ${{ steps.flags.outputs.browser == 'firefox' }}
+        run: firefox --version
+
       - name: Run smoke (HTML report)
         run: |
-          pytest -m "smoke" --browser=chrome --headless \
+          pytest -m "smoke" \
+            --browser=${{ steps.flags.outputs.browser }} ${{ steps.flags.outputs.headless }} \
             --html=reports/report.html --self-contained-html -n auto
+
       - name: Run e2e/regression (Allure raw results)
         run: |
-          pytest -m "e2e or regression" --browser=chrome --headless \
+          pytest -m "e2e or regression" \
+            --browser=${{ steps.flags.outputs.browser }} ${{ steps.flags.outputs.headless }} \
             --alluredir=reports/allure-results -n auto
+
       - name: Upload HTML report
         uses: actions/upload-artifact@v4
         with:
@@ -110,6 +175,7 @@ jobs:
           path: reports/report.html
           if-no-files-found: warn
           retention-days: 7
+
       - name: Upload Allure results
         uses: actions/upload-artifact@v4
         with:
@@ -117,6 +183,7 @@ jobs:
           path: reports/allure-results/
           if-no-files-found: ignore
           retention-days: 7
+
       - name: Upload screenshots (on failures)
         if: always()
         uses: actions/upload-artifact@v4
