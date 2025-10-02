@@ -112,7 +112,7 @@ jobs:
           SKIP_PRERUN_CHECK=${{ vars.SKIP_PRERUN_CHECK || 'false' }}
           E2E_DEFAULT_USER=${{ secrets.E2E_DEFAULT_USER }}
           E2E_PASSWORD_standard_user=${{ secrets.E2E_PASSWORD_standard_user }}
-          E2E_USERS_JSON=${{ secrets.E2E_USERS_JSON }}
+          E2E_USERS_JSON='${{ secrets.E2E_USERS_JSON }}'
           EOF
 
           echo "----- .env (safe preview) -----"
