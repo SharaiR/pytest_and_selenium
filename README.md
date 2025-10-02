@@ -1,17 +1,18 @@
 # pytest-selenium-template - Demo project for `E2E/UI test automation`
+[![CI](https://github.com/SharaiR/pytest_and_selenium/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SharaiR/pytest_and_selenium/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![Selenium](https://img.shields.io/badge/selenium-4.35.0-43B02A?logo=selenium)
-[![Python](https://img.shields.io/badge/python-3.13+-blue.svg)]()
-![unit tests](https://img.shields.io/badge/tests-unit-green)
-[![pytest](https://img.shields.io/badge/tested_with-pytest-green.svg)]()
+[![Python](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/downloads/)
+[![Selenium](https://img.shields.io/pypi/v/selenium.svg?label=selenium)](https://pypi.org/project/selenium/)
+[![pytest](https://img.shields.io/badge/tested_with-pytest-green.svg)](https://docs.pytest.org/)
+[![flake8](https://img.shields.io/badge/lint-flake8-lightgrey.svg)](https://flake8.pycqa.org/)
+[![Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://black.readthedocs.io/)
 ![parallel](https://img.shields.io/badge/parallel-pytest--xdist-yellowgreen)
 
-![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
-[![flake8](https://img.shields.io/badge/lint-flake8-lightgrey.svg)]()
-![Black](https://img.shields.io/badge/code%20style-black-000000.svg)
-<!-- ![Allure](https://img.shields.io/badge/report-Allure-ff69b4) -->
-[![CI](https://github.com/SharaiR/pytest_and_selenium/actions/workflows/ci.yml/badge.svg)](https://github.com/SharaiR/pytest_and_selenium/actions)
+![coverage](https://img.shields.io/endpoint?url=https://sharair.github.io/pytest_and_selenium/coverage.json)
+[![Allure](https://img.shields.io/badge/report-Allure-ff69b4)](https://sharair.github.io/pytest_and_selenium/)
 [Allure Report (latest)](https://sharair.github.io/pytest_and_selenium/)
+
+[![pages-build-deployment](https://github.com/SharaiR/pytest_and_selenium/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/SharaiR/pytest_and_selenium/actions/workflows/pages/pages-build-deployment)
 
 A modern **Pytest + Selenium** template project with Page Object Model (POM), fixtures, screenshots on failures and ready-to-use reporting (HTML & Allure).
 
@@ -26,6 +27,28 @@ A modern **Pytest + Selenium** template project with Page Object Model (POM), fi
 - ✅ **Parallel runs** with `pytest-xdist`
 - ✅ **Code style & quality checks**: `flake8`, `black`, `pytest-cov`
 
+---
+
+## CI (GitHub Actions)
+
+Workflow: `.github/workflows/ci.yml`
+
+Pipeline jobs:
+- **Lint** — runs `black` and `flake8`.
+- **Unit** — unit tests + coverage. Artifacts:  
+  `unit-artifacts` → `reports/unit_report.html`, `reports/coverage.xml`, `htmlcov/**`
+- **E2E** — UI/E2E Artifacts:  
+  `e2e-artifacts` → `reports/e2e_report.html`, `artifacts/screenshots/**`  
+  Also uploads `allure-results`.
+
+Publishing:
+- **Allure Report (latest)** is published to **GitHub Pages** (Source: *GitHub Actions*) by the `Deploy Allure Report` job.  
+  Link: `https://sharair.github.io/pytest_and_selenium/`  
+  Deployment runs on `push` to the default branch.
+
+Dynamic coverage badge:
+- During deployment, `coverage.json` is generated on GitHub Pages from `reports/coverage.xml`, so Therefore, the badge shows the real result.
+  
 ---
 
 ## Quick start (local)
