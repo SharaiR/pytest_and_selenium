@@ -5,6 +5,9 @@ on:
     branches: ["**"]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint (black & flake8)
@@ -153,6 +156,11 @@ jobs:
     concurrency:
       group: "pages"
       cancel-in-progress: true
+    # IMPORTANT: REQUIRED PERMISSIONS FOR THIS JOB
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -186,7 +194,6 @@ jobs:
           allure generate reports/allure-results --clean -o reports/allure-report
           test -f reports/allure-report/index.html
 
-      # Configure Pages and upload the site artifact
       - name: Configure Pages
         if: steps.check_allure.outputs.found == 'true'
         uses: actions/configure-pages@v5
@@ -197,7 +204,6 @@ jobs:
         with:
           path: reports/allure-report
 
-      # Deploy to Pages
       - name: Deploy to GitHub Pages
         if: steps.check_allure.outputs.found == 'true'
         id: deployment
