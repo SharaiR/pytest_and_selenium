@@ -71,15 +71,6 @@ jobs:
     name: E2E (headless, Chrome/Firefox, xdist)
     runs-on: ubuntu-latest
     needs: unit
-    env:
-      BROWSER: ${{ vars.BROWSER }}
-      HEADLESS: ${{ vars.HEADLESS }}
-      BASE_URL: ${{ vars.BASE_URL }}
-      DEFAULT_TIMEOUT: ${{ vars.DEFAULT_TIMEOUT }}
-      SKIP_PRERUN_CHECK: ${{ vars.SKIP_PRERUN_CHECK }}
-      E2E_DEFAULT_USER: ${{ secrets.E2E_DEFAULT_USER }}
-      E2E_PASSWORD_standard_user: ${{ secrets.E2E_PASSWORD_standard_user }}
-      E2E_USERS_JSON: ${{ secrets.E2E_USERS_JSON }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -90,14 +81,14 @@ jobs:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: ${{ runner.os }}-pip-
+
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Browsers via apt (without third-party actions)
       - name: Install Google Chrome (if BROWSER is chrome or empty)
-        if: ${{ !env.BROWSER || env.BROWSER == 'chrome' }}
+        if: ${{ (vars.BROWSER == '' || vars.BROWSER == null || vars.BROWSER == 'chrome') }}
         run: |
           set -eux
           sudo apt-get update
@@ -110,11 +101,10 @@ jobs:
           google-chrome --version
 
       - name: Install Firefox (if BROWSER is firefox)
-        if: ${{ env.BROWSER == 'firefox' }}
+        if: ${{ vars.BROWSER == 'firefox' }}
         run: |
           set -eux
           sudo apt-get update
-          # Устанавливаем Firefox из PPA, чтобы он был deb, а не snap
           sudo apt-get install -y software-properties-common
           sudo add-apt-repository -y ppa:mozillateam/ppa
           echo 'Package: *\nPin: release o=LP-PPA-mozillateam\nPin-Priority: 1001' | \
@@ -126,23 +116,31 @@ jobs:
       - name: Create .env from GitHub Secrets/Vars (e2e)
         run: |
           cat > .env <<'EOF'
-          BROWSER=${BROWSER:-chrome}
-          HEADLESS=${HEADLESS:-true}
-          BASE_URL=${BASE_URL:-https://www.saucedemo.com}
-          DEFAULT_TIMEOUT=${DEFAULT_TIMEOUT:-10}
-          SKIP_PRERUN_CHECK=${SKIP_PRERUN_CHECK:-false}
-          E2E_DEFAULT_USER=${E2E_DEFAULT_USER}
-          E2E_PASSWORD_standard_user=${E2E_PASSWORD_standard_user}
-          E2E_USERS_JSON=${E2E_USERS_JSON}
+          BROWSER=${{ vars.BROWSER != '' && vars.BROWSER || 'chrome' }}
+          HEADLESS=${{ vars.HEADLESS != '' && vars.HEADLESS || 'true' }}
+          BASE_URL=${{ vars.BASE_URL != '' && vars.Base_URL || 'https://www.saucedemo.com' }}
+          DEFAULT_TIMEOUT=${{ vars.DEFAULT_TIMEOUT != '' && vars.DEFAULT_TIMEOUT || '10' }}
+          SKIP_PRERUN_CHECK=${{ vars.SKIP_PRERUN_CHECK != '' && vars.SKIP_PRERUN_CHECK || 'false' }}
+          E2E_DEFAULT_USER=${{ secrets.E2E_DEFAULT_USER }}
+          E2E_PASSWORD_standard_user=${{ secrets.E2E_PASSWORD_standard_user }}
+          E2E_USERS_JSON=${{ secrets.E2E_USERS_JSON }}
           EOF
-          echo "----- .env -----"; sed 's/=\(.*\)/=<hidden>/' .env; echo "---------------"
+
+          echo "----- .env (masked) -----"
+          sed -E 's/=(.*)/=<hidden>/' .env
+          echo "-------------------------"
+
+          # Export .env to the current shell
+          set -a
+          . ./.env
+          set +a
 
       - name: Run smoke (HTML report)
         run: |
           set -eux
           EXTRA=""
           if [ "${HEADLESS}" = "true" ] || [ "${HEADLESS}" = "1" ]; then EXTRA="--headless"; fi
-          pytest -m "smoke" --browser="${BROWSER:-chrome}" ${EXTRA} \
+          pytest -m "smoke" --browser="${BROWSER}" ${EXTRA} \
             --html=reports/report.html --self-contained-html -n auto
 
       - name: Run e2e/regression (Allure raw results)
@@ -150,7 +148,7 @@ jobs:
           set -eux
           EXTRA=""
           if [ "${HEADLESS}" = "true" ] || [ "${HEADLESS}" = "1" ]; then EXTRA="--headless"; fi
-          pytest -m "e2e or regression" --browser="${BROWSER:-chrome}" ${EXTRA} \
+          pytest -m "e2e or regression" --browser="${BROWSER}" ${EXTRA} \
             --alluredir=reports/allure-results -n auto
 
       - name: Upload HTML report
@@ -177,36 +175,6 @@ jobs:
           path: artifacts/screenshots/
           if-no-files-found: ignore
           retention-days: 7
-
-  allure_pages:
-    name: Publish Allure to GitHub Pages
-    runs-on: ubuntu-latest
-    needs: e2e
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download Allure results
-        uses: actions/download-artifact@v4
-        with:
-          name: allure-results
-          path: allure-results
-
-      # Download Allure CLI without actions (wget + unzip) and generate statics
-      - name: Generate Allure report (local CLI)
-        run: |
-          set -eux
-          sudo apt-get update
-          sudo apt-get install -y default-jre wget unzip
-          ALLURE_VERSION=2.29.0
-          wget -q https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure-${ALLURE_VERSION}.zip
-          unzip -q allure-${ALLURE_VERSION}.zip
-          ./allure-${ALLURE_VERSION}/bin/allure generate allure-results --clean -o allure-report
-          test -f allure-report/index.html
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: allure-report
 
       - name: Deploy to GitHub Pages
         id: deployment
