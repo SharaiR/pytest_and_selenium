@@ -6,14 +6,15 @@ on:
   pull_request:
 
 jobs:
-  # --- 1. Lint ---
   lint:
     name: Lint (black & flake8)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
@@ -28,15 +29,16 @@ jobs:
       - name: Run flake8
         run: flake8 .
 
-  # --- 2. Unit tests + coverage ---
   unit:
     name: Unit tests + coverage
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
@@ -63,15 +65,16 @@ jobs:
             htmlcov/**
           if-no-files-found: warn
 
-  # --- 3. E2E tests ---
   e2e:
     name: E2E (headless, Chrome, xdist)
     runs-on: ubuntu-latest
     needs: unit
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
@@ -88,13 +91,17 @@ jobs:
           HEADLESS=true
           BASE_URL=https://www.saucedemo.com
           DEFAULT_TIMEOUT=10
+          # Disable the pre-run check (set to true/1/yes to skip)
           SKIP_PRERUN_CHECK=false
 
           # USERS
           E2E_DEFAULT_USER=${{ secrets.E2E_DEFAULT_USER }}
           E2E_USERS_JSON=${{ secrets.E2E_USERS_JSON }}
+          # Or separately:
+          # E2E_PASSWORD_standard_user=${{ secrets.E2E_PASSWORD_standard_user }}
           EOF
           echo "Created .env"
+          echo "---- .env (safe preview) ----"
           grep -E '^(BROWSER|HEADLESS|BASE_URL|DEFAULT_TIMEOUT|SKIP_PRERUN_CHECK)=' .env || true
           echo "E2E_DEFAULT_USER present: $(grep -c '^E2E_DEFAULT_USER=' .env)"
           echo "E2E_USERS_JSON present:   $(grep -c '^E2E_USERS_JSON=' .env)"
@@ -102,11 +109,10 @@ jobs:
       - name: Run E2E smoke tests
         run: |
           set -euo pipefail
-          mkdir -p reports artifacts/screenshots reports/allure-results
+          mkdir -p reports artifacts/screenshots
           echo "Running smoke on ${BROWSER:-unset}, headless=${HEADLESS:-unset}"
           pytest -m "e2e and smoke" -q \
-            --html=reports/e2e_report.html --self-contained-html \
-            --alluredir=reports/allure-results
+            --html=reports/e2e_report.html --self-contained-html
 
       - name: Upload E2E artifacts (HTML + screenshots)
         if: always()
@@ -126,7 +132,6 @@ jobs:
           path: reports/allure-results
           if-no-files-found: warn
 
-  # --- 4. Deploy Allure Report ---
   deploy-allure:
     name: Deploy Allure Report
     runs-on: ubuntu-latest
