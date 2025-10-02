@@ -31,7 +31,6 @@ jobs:
           BASE_URL=https://www.saucedemo.com
           DEFAULT_TIMEOUT=10
           SKIP_PRERUN_CHECK=false
-
           E2E_DEFAULT_USER=${{ secrets.E2E_DEFAULT_USER }}
           E2E_USERS_JSON=${{ secrets.E2E_USERS_JSON }}
           EOF
@@ -41,7 +40,8 @@ jobs:
           echo "E2E_DEFAULT_USER present: $(grep -c '^E2E_DEFAULT_USER=' .env)"
           echo "E2E_USERS_JSON present:   $(grep -c '^E2E_USERS_JSON=' .env)"
 
-      - name: Debug non-sensitive env (optional)
+      # Quickly check that the environment is visible to the process
+      - name: Debug non-sensitive env
         run: |
           set -e
           echo "BROWSER=$BROWSER" || true
@@ -52,15 +52,16 @@ jobs:
       - name: Run unit tests
         run: |
           mkdir -p reports artifacts/screenshots
-          pytest -m "not e2e" --maxfail=1 -q --html=reports/unit_report.html --self-contained-html
+          pytest -m "not e2e" --maxfail=1 -q \
+            --html=reports/unit_report.html --self-contained-html
 
       - name: Run E2E smoke tests
         run: |
           set -euo pipefail
-          echo "Running smoke on $BROWSER, headless=${HEADLESS:-unset}"
-          pytest -m "e2e and smoke" -q --html=reports/e2e_report.html --self-contained-html
+          echo "Running smoke on ${BROWSER:-unset}, headless=${HEADLESS:-unset}"
+          pytest -m "e2e and smoke" -q \
+            --html=reports/e2e_report.html --self-contained-html
 
-      # Always raise artifacts (reports and screenshots when crashing)
       - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v4
