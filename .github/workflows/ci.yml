@@ -131,28 +131,3 @@ jobs:
           name: allure-results
           path: reports/allure-results
           if-no-files-found: warn
-
-  deploy-allure:
-    name: Deploy Allure Report
-    runs-on: ubuntu-latest
-    needs: e2e
-    if: always()
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download allure results
-        uses: actions/download-artifact@v4
-        with:
-          name: allure-results
-          path: reports/allure-results
-
-      - name: Generate Allure report
-        run: |
-          npm install -g allure-commandline --save-dev
-          allure generate reports/allure-results --clean -o reports/allure-report
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: reports/allure-report
