@@ -88,67 +88,64 @@ jobs:
           pip install -r requirements.txt
 
       - name: Install Google Chrome (if BROWSER is chrome or empty)
-        if: ${{ (vars.BROWSER == '' || vars.BROWSER == null || vars.BROWSER == 'chrome') }}
-        run: |
-          set -eux
-          sudo apt-get update
-          sudo apt-get install -y wget gnupg
-          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-linux.gpg
-          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | \
-            sudo tee /etc/apt/sources.list.d/google-chrome.list
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-          google-chrome --version
+        if: ${{ !vars.BROWSER || vars.BROWSER == 'chrome' }}
+        uses: browser-actions/setup-chrome@v1
 
       - name: Install Firefox (if BROWSER is firefox)
         if: ${{ vars.BROWSER == 'firefox' }}
-        run: |
-          set -eux
-          sudo apt-get update
-          sudo apt-get install -y software-properties-common
-          sudo add-apt-repository -y ppa:mozillateam/ppa
-          echo 'Package: *\nPin: release o=LP-PPA-mozillateam\nPin-Priority: 1001' | \
-            sudo tee /etc/apt/preferences.d/mozilla
-          sudo apt-get update
-          sudo apt-get install -y firefox
-          firefox --version
+        uses: browser-actions/setup-firefox@v1
 
       - name: Create .env from GitHub Secrets/Vars (e2e)
+        shell: bash
         run: |
           cat > .env <<'EOF'
-          BROWSER=${{ vars.BROWSER != '' && vars.BROWSER || 'chrome' }}
-          HEADLESS=${{ vars.HEADLESS != '' && vars.HEADLESS || 'true' }}
-          BASE_URL=${{ vars.BASE_URL != '' && vars.Base_URL || 'https://www.saucedemo.com' }}
-          DEFAULT_TIMEOUT=${{ vars.DEFAULT_TIMEOUT != '' && vars.DEFAULT_TIMEOUT || '10' }}
-          SKIP_PRERUN_CHECK=${{ vars.SKIP_PRERUN_CHECK != '' && vars.SKIP_PRERUN_CHECK || 'false' }}
+          BROWSER=${{ vars.BROWSER || 'chrome' }}
+          HEADLESS=${{ vars.HEADLESS || 'true' }}
+          BASE_URL=${{ vars.BASE_URL || 'https://www.saucedemo.com' }}
+          DEFAULT_TIMEOUT=${{ vars.DEFAULT_TIMEOUT || '10' }}
+          SKIP_PRERUN_CHECK=${{ vars.SKIP_PRERUN_CHECK || 'false' }}
           E2E_DEFAULT_USER=${{ secrets.E2E_DEFAULT_USER }}
           E2E_PASSWORD_standard_user=${{ secrets.E2E_PASSWORD_standard_user }}
           E2E_USERS_JSON=${{ secrets.E2E_USERS_JSON }}
           EOF
 
-          echo "----- .env (masked) -----"
-          sed -E 's/=(.*)/=<hidden>/' .env
-          echo "-------------------------"
-
-          # Export .env to the current shell
-          set -a
-          . ./.env
-          set +a
+          echo "----- .env preview (safely) -----"
+          sed -E 's/(PASSWORD_[^=]*=).*/\1<hidden>/; s/(E2E_USERS_JSON=).*/\1<hidden>/' .env
+          echo "---------------------------------"
 
       - name: Run smoke (HTML report)
+        shell: bash
         run: |
-          set -eux
+          set -euo pipefail
+          set -a; source .env; set +a
+
+          BROWSER="${BROWSER:-chrome}"
+          H="${HEADLESS:-true}"; H="${H,,}"
+
           EXTRA=""
-          if [ "${HEADLESS}" = "true" ] || [ "${HEADLESS}" = "1" ]; then EXTRA="--headless"; fi
-          pytest -m "smoke" --browser="${BROWSER}" ${EXTRA} \
+          if [[ "$H" == "true" || "$H" == "1" || "$H" == "yes" ]]; then
+            EXTRA="--headless"
+          fi
+
+          echo "Browser: $BROWSER | Headless: $H | Extra: $EXTRA"
+          pytest -m "smoke" --browser="$BROWSER" $EXTRA \
             --html=reports/report.html --self-contained-html -n auto
 
       - name: Run e2e/regression (Allure raw results)
+        shell: bash
         run: |
-          set -eux
+          set -euo pipefail
+          set -a; source .env; set +a
+
+          BROWSER="${BROWSER:-chrome}"
+          H="${HEADLESS:-true}"; H="${H,,}"
+
           EXTRA=""
-          if [ "${HEADLESS}" = "true" ] || [ "${HEADLESS}" = "1" ]; then EXTRA="--headless"; fi
-          pytest -m "e2e or regression" --browser="${BROWSER}" ${EXTRA} \
+          if [[ "$H" == "true" || "$H" == "1" || "$H" == "yes" ]]; then
+            EXTRA="--headless"
+          fi
+
+          pytest -m "e2e or regression" --browser="$BROWSER" $EXTRA \
             --alluredir=reports/allure-results -n auto
 
       - name: Upload HTML report
@@ -175,7 +172,3 @@ jobs:
           path: artifacts/screenshots/
           if-no-files-found: ignore
           retention-days: 7
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
