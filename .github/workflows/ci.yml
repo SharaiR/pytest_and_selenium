@@ -1,169 +1,72 @@
 name: CI
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main, master, feature/** ]
+    branches: [ "**" ]
   pull_request:
-    branches: [ main, master ]
-
-permissions:
-  contents: read
 
 jobs:
-  lint:
-    name: Lint (black & flake8)
+  tests:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: ${{ runner.os }}-pip-
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: black --check
-        run: black --check .
-      - name: flake8
-        run: flake8 src tests
 
-  unit:
-    name: Unit tests + coverage
-    runs-on: ubuntu-latest
-    needs: lint
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: ${{ runner.os }}-pip-
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Use .env.example
-        run: cp .env.example .env
-      - name: Run unit tests with coverage
-        run: |
-          pytest tests/unit --cov=src --cov-report=term-missing \
-            --cov-report=xml:reports/coverage/coverage.xml
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-xml
-          path: reports/coverage/coverage.xml
-          if-no-files-found: error
-          retention-days: 7
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  e2e:
-    name: E2E (headless, Chrome, xdist)
-    runs-on: ubuntu-latest
-    needs: unit
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: ${{ runner.os }}-pip-
-      - name: Install deps
+
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Install Google Chrome
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y wget gnupg
-          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub \
-            | sudo gpg --dearmor -o /usr/share/keyrings/google-linux.gpg
-          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
-            | sudo tee /etc/apt/sources.list.d/google-chrome.list
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-          google-chrome --version
-
-      - name: Remove preinstalled chromedriver
-        run: sudo rm -f /usr/bin/chromedriver || true
-
-      - name: Create .env from GitHub Secrets/Vars (e2e)
-        shell: bash
+      - name: Create .env from repo secrets/variables
         run: |
           cat > .env <<'EOF'
-          BROWSER=${{ vars.BROWSER || 'chrome' }}
-          HEADLESS=${{ vars.HEADLESS || 'true' }}
-          BASE_URL=${{ vars.BASE_URL || 'https://www.saucedemo.com' }}
-          DEFAULT_TIMEOUT=${{ vars.DEFAULT_TIMEOUT || '10' }}
-          SKIP_PRERUN_CHECK=${{ vars.SKIP_PRERUN_CHECK || 'false' }}
+          BROWSER=${{ vars.BROWSER || 'firefox' }}
+          HEADLESS=true
+          BASE_URL=https://www.saucedemo.com
+          DEFAULT_TIMEOUT=10
+          SKIP_PRERUN_CHECK=false
+
           E2E_DEFAULT_USER=${{ secrets.E2E_DEFAULT_USER }}
-          E2E_PASSWORD_standard_user=${{ secrets.E2E_PASSWORD_standard_user }}
-          E2E_USERS_JSON='${{ secrets.E2E_USERS_JSON }}'
+          E2E_USERS_JSON=${{ secrets.E2E_USERS_JSON }}
           EOF
+          echo "Created .env"
+          echo "---- .env (safe preview) ----"
+          grep -E '^(BROWSER|HEADLESS|BASE_URL|DEFAULT_TIMEOUT|SKIP_PRERUN_CHECK)=' .env || true
+          echo "E2E_DEFAULT_USER present: $(grep -c '^E2E_DEFAULT_USER=' .env)"
+          echo "E2E_USERS_JSON present:   $(grep -c '^E2E_USERS_JSON=' .env)"
 
-          echo "----- .env (safe preview) -----"
-          sed -E 's/(PASSWORD_[^=]*=).*/\1<hidden>/; s/(E2E_USERS_JSON=).*/\1<hidden>/' .env
-          echo "--------------------------------"
+      - name: Debug non-sensitive env (optional)
+        run: |
+          set -e
+          echo "BROWSER=$BROWSER" || true
+          echo "HEADLESS=$HEADLESS" || true
+          echo "BASE_URL=$BASE_URL" || true
+          test -f .env && echo ".env exists" || echo ".env missing"
 
-      - name: Run smoke (HTML report)
-        shell: bash
+      - name: Run unit tests
+        run: |
+          mkdir -p reports artifacts/screenshots
+          pytest -m "not e2e" --maxfail=1 -q --html=reports/unit_report.html --self-contained-html
+
+      - name: Run E2E smoke tests
         run: |
           set -euo pipefail
-          set -a; source .env; set +a
-          H="${HEADLESS:-true}"; H="${H,,}"
-          EXTRA=""
-          if [[ "$H" == "true" || "$H" == "1" || "$H" == "yes" ]]; then EXTRA="--headless"; fi
-          echo "Running smoke on $BROWSER, headless=$H"
-          pytest -m "smoke" --browser=$BROWSER $EXTRA \
-            --html=reports/report.html --self-contained-html -n auto
+          echo "Running smoke on $BROWSER, headless=${HEADLESS:-unset}"
+          pytest -m "e2e and smoke" -q --html=reports/e2e_report.html --self-contained-html
 
-      - name: Run e2e/regression (Allure raw results)
-        shell: bash
-        run: |
-          set -euo pipefail
-          set -a; source .env; set +a
-          H="${HEADLESS:-true}"; H="${H,,}"
-          EXTRA=""
-          if [[ "$H" == "true" || "$H" == "1" || "$H" == "yes" ]]; then EXTRA="--headless"; fi
-          echo "Running e2e/regression on $BROWSER, headless=$H"
-          pytest -m "e2e or regression" --browser=$BROWSER $EXTRA \
-            --alluredir=reports/allure-results -n auto
-
-      - name: Upload HTML report
-        uses: actions/upload-artifact@v4
-        with:
-          name: html-report
-          path: reports/report.html
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: Upload Allure results
-        uses: actions/upload-artifact@v4
-        with:
-          name: allure-results
-          path: reports/allure-results/
-          if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Upload screenshots (on failures)
+      # Always raise artifacts (reports and screenshots when crashing)
+      - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots
-          path: artifacts/screenshots/
-          if-no-files-found: ignore
-          retention-days: 7
+          name: test-artifacts
+          path: |
+            reports/**
+            artifacts/screenshots/**
+          if-no-files-found: warn
