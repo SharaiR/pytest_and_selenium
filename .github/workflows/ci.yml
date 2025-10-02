@@ -68,9 +68,18 @@ jobs:
           retention-days: 7
 
   e2e:
-    name: E2E (headless, xdist)
+    name: E2E (headless, Chrome/Firefox, xdist)
     runs-on: ubuntu-latest
     needs: unit
+    env:
+      BROWSER: ${{ vars.BROWSER }}
+      HEADLESS: ${{ vars.HEADLESS }}
+      BASE_URL: ${{ vars.BASE_URL }}
+      DEFAULT_TIMEOUT: ${{ vars.DEFAULT_TIMEOUT }}
+      SKIP_PRERUN_CHECK: ${{ vars.SKIP_PRERUN_CHECK }}
+      E2E_DEFAULT_USER: ${{ secrets.E2E_DEFAULT_USER }}
+      E2E_PASSWORD_standard_user: ${{ secrets.E2E_PASSWORD_standard_user }}
+      E2E_USERS_JSON: ${{ secrets.E2E_USERS_JSON }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -86,48 +95,62 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Installing browsers via verified actions
-      - name: Setup Chrome (if chosen)
-        if: ${{ !vars.BROWSER || vars.BROWSER == 'chrome' }}
-        uses: browser-actions/setup-chrome@v1
-      - name: Setup Firefox (if chosen)
-        if: ${{ vars.BROWSER == 'firefox' }}
-        uses: browser-actions/setup-firefox@v1
+      # Browsers via apt (without third-party actions)
+      - name: Install Google Chrome (if BROWSER is chrome or empty)
+        if: ${{ !env.BROWSER || env.BROWSER == 'chrome' }}
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-linux.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | \
+            sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+          google-chrome --version
+
+      - name: Install Firefox (if BROWSER is firefox)
+        if: ${{ env.BROWSER == 'firefox' }}
+        run: |
+          set -eux
+          sudo apt-get update
+          # Устанавливаем Firefox из PPA, чтобы он был deb, а не snap
+          sudo apt-get install -y software-properties-common
+          sudo add-apt-repository -y ppa:mozillateam/ppa
+          echo 'Package: *\nPin: release o=LP-PPA-mozillateam\nPin-Priority: 1001' | \
+            sudo tee /etc/apt/preferences.d/mozilla
+          sudo apt-get update
+          sudo apt-get install -y firefox
+          firefox --version
 
       - name: Create .env from GitHub Secrets/Vars (e2e)
         run: |
-          {
-            echo "BROWSER=${{ vars.BROWSER }}"
-            echo "HEADLESS=${{ vars.HEADLESS }}"
-            echo "BASE_URL=${{ vars.BASE_URL }}"
-            echo "DEFAULT_TIMEOUT=${{ vars.DEFAULT_TIMEOUT || '10' }}"
-            echo "SKIP_PRERUN_CHECK=${{ vars.SKIP_PRERUN_CHECK || 'false' }}"
-            echo "E2E_DEFAULT_USER=${{ secrets.E2E_DEFAULT_USER }}"
-            echo "E2E_PASSWORD_standard_user=${{ secrets.E2E_PASSWORD_standard_user }}"
-            echo "E2E_USERS_JSON=${{ secrets.E2E_USERS_JSON }}"
-          } > .env
-
-      - name: Compute pytest options from vars
-        id: opts
-        shell: bash
-        run: |
-          B="${{ vars.BROWSER }}"
-          H="${{ vars.HEADLESS }}"
-          [ -z "$B" ] && B=chrome
-          OPTS="--browser=${B}"
-          if [ "${H,,}" = "true" ] || [ "${H}" = "1" ] || [ "${H,,}" = "yes" ]; then
-            OPTS="$OPTS --headless"
-          fi
-          echo "PYTEST_OPTS=$OPTS" >> $GITHUB_OUTPUT
+          cat > .env <<'EOF'
+          BROWSER=${BROWSER:-chrome}
+          HEADLESS=${HEADLESS:-true}
+          BASE_URL=${BASE_URL:-https://www.saucedemo.com}
+          DEFAULT_TIMEOUT=${DEFAULT_TIMEOUT:-10}
+          SKIP_PRERUN_CHECK=${SKIP_PRERUN_CHECK:-false}
+          E2E_DEFAULT_USER=${E2E_DEFAULT_USER}
+          E2E_PASSWORD_standard_user=${E2E_PASSWORD_standard_user}
+          E2E_USERS_JSON=${E2E_USERS_JSON}
+          EOF
+          echo "----- .env -----"; sed 's/=\(.*\)/=<hidden>/' .env; echo "---------------"
 
       - name: Run smoke (HTML report)
         run: |
-          pytest -m "smoke" ${{ steps.opts.outputs.PYTEST_OPTS }} \
+          set -eux
+          EXTRA=""
+          if [ "${HEADLESS}" = "true" ] || [ "${HEADLESS}" = "1" ]; then EXTRA="--headless"; fi
+          pytest -m "smoke" --browser="${BROWSER:-chrome}" ${EXTRA} \
             --html=reports/report.html --self-contained-html -n auto
 
       - name: Run e2e/regression (Allure raw results)
         run: |
-          pytest -m "e2e or regression" ${{ steps.opts.outputs.PYTEST_OPTS }} \
+          set -eux
+          EXTRA=""
+          if [ "${HEADLESS}" = "true" ] || [ "${HEADLESS}" = "1" ]; then EXTRA="--headless"; fi
+          pytest -m "e2e or regression" --browser="${BROWSER:-chrome}" ${EXTRA} \
             --alluredir=reports/allure-results -n auto
 
       - name: Upload HTML report
@@ -146,27 +169,45 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Upload screenshots (on failures)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: artifacts/screenshots/
+          if-no-files-found: ignore
+          retention-days: 7
+
   allure_pages:
     name: Publish Allure to GitHub Pages
     runs-on: ubuntu-latest
     needs: e2e
     steps:
       - uses: actions/checkout@v4
+
       - name: Download Allure results
         uses: actions/download-artifact@v4
         with:
           name: allure-results
           path: allure-results
-      - name: Generate Allure report
-        uses: simple-elf/allure-report-action@v1.7
-        with:
-          allure_results: allure-results
-          allure_report: allure-report
-          keep_reports: 5
+
+      # Download Allure CLI without actions (wget + unzip) and generate statics
+      - name: Generate Allure report (local CLI)
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y default-jre wget unzip
+          ALLURE_VERSION=2.29.0
+          wget -q https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure-${ALLURE_VERSION}.zip
+          unzip -q allure-${ALLURE_VERSION}.zip
+          ./allure-${ALLURE_VERSION}/bin/allure generate allure-results --clean -o allure-report
+          test -f allure-report/index.html
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: allure-report
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
