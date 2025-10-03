@@ -73,7 +73,9 @@ def test_post_init_keeps_existing_default_user(monkeypatch):
     data = {"standard_user": "secret_sauce", "problem_user": "pwd"}
     monkeypatch.setenv("E2E_USERS_JSON", json.dumps(data))
 
-    settings = Settings(e2e_users={"should": "be replaced"}, e2e_default_user="standard_user")
+    settings = Settings(
+        e2e_users={"should": "be replaced"}, e2e_default_user="standard_user"
+    )
 
     assert settings.e2e_users == data
     assert settings.e2e_default_user == "standard_user"
