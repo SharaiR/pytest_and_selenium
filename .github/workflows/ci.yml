@@ -2,8 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [ main, master, feature/** ]
   pull_request:
+    branches: [ main, master ]
 
 permissions:
   contents: read
@@ -143,7 +144,7 @@ jobs:
           name: allure-results
           path: reports/allure-results
           if-no-files-found: warn
-  
+
   # --- Build & Deploy Allure to GitHub Pages (via GitHub Actions source) ---
   deploy-allure:
     name: Deploy Allure Report (GitHub Pages)
@@ -166,7 +167,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
+
       # 1.1. Download Allure results from e2e job
       - name: Download allure results
         uses: actions/download-artifact@v4
