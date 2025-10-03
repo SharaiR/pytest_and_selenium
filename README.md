@@ -35,20 +35,20 @@ Workflow: `.github/workflows/ci.yml`
 
 Pipeline jobs:
 - **Lint** — runs `black` and `flake8`.
-- **Unit** — unit tests + coverage. Artifacts:  
+- **Unit** — unit tests + coverage. Artifacts:
   `unit-artifacts` → `reports/unit_report.html`, `reports/coverage.xml`, `htmlcov/**`
-- **E2E** — UI/E2E Artifacts:  
-  `e2e-artifacts` → `reports/e2e_report.html`, `artifacts/screenshots/**`  
+- **E2E** — UI/E2E Artifacts:
+  `e2e-artifacts` → `reports/e2e_report.html`, `artifacts/screenshots/**`
   Also uploads `allure-results`.
 
 Publishing:
-- **Allure Report (latest)** is published to **GitHub Pages** (Source: *GitHub Actions*) by the `Deploy Allure Report` job.  
-  Link: `https://sharair.github.io/pytest_and_selenium/`  
+- **Allure Report (latest)** is published to **GitHub Pages** (Source: *GitHub Actions*) by the `Deploy Allure Report` job.
+  Link: `https://sharair.github.io/pytest_and_selenium/`
   Deployment runs on `push` to the default branch.
 
 Dynamic coverage badge:
 - During deployment, `coverage.json` is generated on GitHub Pages from `reports/coverage.xml`, so Therefore, the badge shows the real result.
-  
+
 ---
 
 ## Quick start (local)
@@ -180,10 +180,12 @@ python3 -m coverage html -d reports/coverage
 │       └── inventory_page.py       # page object for inventory/actions
 ├── tests/
 │   ├── e2e/                        # End-to-end UI tests
+│   │   └── test_add_to_cart.py
 │   │   └── test_login.py
 │   └── unit/                       # Unit tests for page objects & utils
 │       ├── test_base_page.py
 │       ├── test_config.py
+│       ├── test_config_users.py
 │       ├── test_inventory_page.py
 │       └── test_login_page.py
 ├── conftest.py                     # Pytest fixtures & hooks (screenshots, driver)
